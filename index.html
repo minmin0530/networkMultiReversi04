@@ -4,7 +4,8 @@
   <title>リバーシ</title>
 </head>
 <body>
-  <canvas id="gamefield0" width="640" height="640" style="position: absolute; left:0px; top:0px;"></canvas><br>
+  <canvas id="gamefield0" width="640" height="640" style="position: absolute; left:0px; top:0px;"></canvas>
+  <div id="panel"  style="position: absolute; left:640px; top:0px;"></div><br>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"></script>
   <script type="text/javascript">
     var socketio = io.connect('http://localhost:8080');
@@ -35,37 +36,87 @@
     var ctx = [];
     var PLAYER_TURN = 0;
     var turn = PLAYER_TURN;
+    var startGameFlag = false;
+    var tableArray = [];
 
     /////////////////////////////////
     // 最初に自分の名前(番号)を受け取る //
     /////////////////////////////////
     socketio.on("getName", function(data) {
       nameArray.push(data);
+
       if (once) {
         once = false;
+
+        tableArray = data.value.fieldNumberArray;
+
+        let i = 0;
+        for (const table of tableArray) {
+          if (table == 1) {
+            ++i;
+          }
+        }
+        if (i > 0) {
+          const span = document.createElement("span");
+          span.style.fontSize = 64 + "px";
+          span.innerText = "既にあるテーブルに参加する";
+          panel.appendChild(span);
+        }
+        i = 0;
+        for (const table of tableArray) {
+          console.log("tabel:" + table);
+          if (table == 1) {
+            const joinButton = document.createElement("button");
+            joinButton.style.fontSize = 64 + "px";
+            joinButton.innerText = "テーブル" + i;
+            joinButton.onclick = joinArray[i];
+            panel.appendChild(joinButton);
+          }
+          ++i;
+        }
+
         myName=data.value.name;
         playingGame(myName);
         watchingGame(myName);
-        for (var u = 0; u < data.value.field.length; ++u) {
-        for (var y = 0; y < 8; ++y) {
-        for (var x = 0; x < 8; ++x) {
-          if (data.value.field[u][y][x] != -1) {
-            for (var v = 0; v < 8; ++v) {
-              if (v == data.value.field[u][y][x]) {
-                ctx[u].fillStyle = colorArray[myName % 12];
-              }
-            }
-            ctx[u].beginPath();
-            ctx[u].arc((x+1) * 79 - 36, (y+1) * 79 - 36,CELL_HALF_SIZE,0,Math.PI*2,true);
-            ctx[u].fill();
-          }
-        }
-        }
-        }
       }
     });
 
+    /////////////////////////////
+    // 現在のテーブル番号の受け取り //
+    /////////////////////////////
+    socketio.on("currentTable", function(data) {
+      fieldNumber = data;
+    });
 
+    var joinNumber = 1;
+
+    //////////////////////////
+    // テーブルに参加の受け取り //
+    //////////////////////////
+    socketio.on("join", function(data) {
+      joinNumber = data.number;
+
+      const span = document.createElement("span");
+      span.style.fontSize = 32 + "px";
+      span.innerText = "プレイヤー数：" + joinNumber + "人";
+      panel.appendChild(span);
+    });
+
+    //////////////////////////
+    // ゲームスタートの受け取り //
+    //////////////////////////    
+    socketio.on("startGame", function(data){
+      console.log("startGame:data"+ data);
+      console.log("startGame:fieldNumber"+ fieldNumber);
+      if (data == fieldNumber) {
+        startGameFlag = true;
+        panel.innerHTML = "";
+        const span = document.createElement("span");
+        span.style.fontSize = 32 + "px";
+        span.innerText = "ゲーム開始！";
+        panel.appendChild(span);
+      }
+    });
     /////////////////////////////////
     // 誰かがコマを置いた処理の受け取り //
     /////////////////////////////////
@@ -76,32 +127,15 @@
             console.log("field" + data.value.field[y][x]);
             for (var v = 0; v < 8; ++v) {
               if (v == data.value.field[y][x]) {
-                ctx[data.value.fieldNumber].fillStyle = colorArray[v ];
+                ctx[0].fillStyle = colorArray[v ];
               }
             }
-            ctx[data.value.fieldNumber].beginPath();
-            ctx[data.value.fieldNumber].arc((x+1) * 79 - 36, (y+1) * 79 - 36,CELL_HALF_SIZE,0,Math.PI*2,true);
-            ctx[data.value.fieldNumber].fill();
+            ctx[0].beginPath();
+            ctx[0].arc((x+1) * 79 - 36, (y+1) * 79 - 36,CELL_HALF_SIZE,0,Math.PI*2,true);
+            ctx[0].fill();
           }
         }
         }
-      if (data.value.fieldNumber == 1) {
-        if (startNewGameFlag) {
-          var msg0 = document.getElementById("msg0");
-          msg0.innerHTML = "順番をお待ち下さい。" + data.value.turn;
-          startNewGameMyTurnFlag = false;
-          turn = data.value.turn;
-        }
-                          console.log("turn:"+data.value.turn);
-                          console.log("Middleturn:"+startNewGameTurn);
-          turn = data.value.turn;
-
-        if (startNewGameFlag && data.value.turn == startNewGameTurn) {
-          var msg0 = document.getElementById("msg0");
-          msg0.innerHTML = "あなたの番です。";
-          startNewGameMyTurnFlag = true;
-        }
-      }
     });
 
 
@@ -122,9 +156,9 @@
       console.log(turn);
 	    console.log(myName);
 
-      // if (!(startNewGameMyTurnFlag && e.clientX <= FIELD_SIZE && e.clientY <= FIELD_SIZE)) {
-      //   return;
-      // }
+      if (!startGameFlag) {
+        return;
+      }
       if (!( e.clientX <= FIELD_SIZE && e.clientY <= FIELD_SIZE)) {
         return;
       }
@@ -138,12 +172,12 @@
 //      ++turn;
       for (var v = 0; v < nameArray.length + 3; ++v) {
         if (v == turn) {
-          ctx[fieldNumber].fillStyle = colorArray[myName % 12];
+          ctx[0].fillStyle = colorArray[myName % 12];
         }
       }
-      ctx[fieldNumber].beginPath();
-      ctx[fieldNumber].arc(x,y,CELL_HALF_SIZE,0,Math.PI*2,true);
-      ctx[fieldNumber].fill();
+      ctx[0].beginPath();
+      ctx[0].arc(x,y,CELL_HALF_SIZE,0,Math.PI*2,true);
+      ctx[0].fill();
     
       var xx = Math.floor(x/CELL_SIZE);    
       var yy = Math.floor(y/CELL_SIZE);    
@@ -159,11 +193,102 @@
 
     };
 
+    ///////////////////////
+    // ゲームをスタートする //
+    ///////////////////////
+    function startGame() {
+      panel.innerHTML = "";
+      startGameFlag = true;
+      socketio.emit("startGame", fieldNumber);
+    }
+
+    //////////////////
+    // 人数を決定する //
+    //////////////////
+    function decidePlayerNumber() {
+      const num = document.getElementById("decidePlayerNumber");
+
+      panel.innerHTML = "";
+      const span = document.createElement("span");
+      span.style.fontSize = 64 + "px";
+      span.innerText = "対戦相手をお待ち下さい";
+      panel.appendChild(span);
+
+
+      const button = document.createElement("button");
+      button.onclick = startGame;
+      button.innerText = "ゲーム開始";
+      button.style.fontSize = 32 + "px";
+      panel.appendChild(button);
+    }
+
+    //////////////////
+    // テーブルを作る //
+    //////////////////
+    function newTable() {
+      panel.innerHTML = "";
+      const select = document.createElement("select");
+      select.id = "decidePlayerNumber";
+      select.style.fontSize = 64 + "px";
+      for (let l = 2; l < 7; ++l) {
+        const option = new Option( l + "人", l, true);
+        select.options.add(option);
+      }
+      const span = document.createElement("span");
+      span.style.fontSize = 64 + "px";
+      span.innerText = "プレイヤー人数";
+
+      const button = document.createElement("button");
+      button.onclick = decidePlayerNumber;
+      button.innerText = "決定";
+      button.style.fontSize = 64 + "px";
+
+      panel.appendChild(span);
+      panel.appendChild(select);
+      panel.appendChild(button);
+
+      const data = {
+//        fieldNumber: 0,
+        fieldOwner: myName
+      };
+      socketio.emit("fieldOwner", data);
+    }
+
+    //////////////////
+    // テーブルに参加 //
+    //////////////////
+
+    var joinArray = [];
+
+    for (let l = 0; l < 100; ++l) {
+      var join = function() {
+        panel.innerHTML = "";
+        const span = document.createElement("span");
+        span.style.fontSize = 64 + "px";
+        span.innerText = "お待ち下さい";
+        panel.appendChild(span);
+        fieldNumber = l;
+        const data = {
+          fieldNumber: l,
+          myName: myName
+        };
+        socketio.emit("join", data);
+      }
+      joinArray.push(join);
+    }
+    const panel = document.getElementById("panel");
+
 
     //////////////////
     // オセロ盤を表示 //
     //////////////////
     window.onload = function() {
+      const button = document.createElement("button");
+      button.style.fontSize = 64 + "px";
+      button.innerText = "テーブルを作る";
+      button.onclick = newTable;
+      panel.appendChild(button);
+
       //描画コンテキストの取得
       for (var v = 0; v < 1; ++v) {
 
