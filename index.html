@@ -1,0 +1,198 @@
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>リバーシ</title>
+</head>
+<body>
+  <canvas id="gamefield0" width="640" height="640" style="position: absolute; left:0px; top:0px;"></canvas><br>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"></script>
+  <script type="text/javascript">
+    var socketio = io.connect('http://localhost:8080');
+    var myName = "";
+    var once = true;
+    var fieldNumber = 0;
+    var nameArray = [];
+    var colorArray = [
+        'rgb(255,00,00)',
+        'rgb(00,255,00)',
+        'rgb(00,00,255)',
+        'rgb(255,255,255)',
+        'rgb(00,00,00)',
+        'rgb(255,255,00)',
+        'rgb(255,00,255)',
+        'rgb(00,255,255)',
+        'rgb(127,127,127)',
+        'rgb(00,127,127)',
+        'rgb(127,00,127)',
+        'rgb(127,127,00)',
+        
+    ];
+    var FIELD_SIZE = 640;
+    var CELL_SIZE = 79;
+    var CELL_HALF_SIZE = 34;
+    var mouseX = 0;
+    var mouseY = 0;
+    var ctx = [];
+    var PLAYER_TURN = 0;
+    var turn = PLAYER_TURN;
+
+    /////////////////////////////////
+    // 最初に自分の名前(番号)を受け取る //
+    /////////////////////////////////
+    socketio.on("getName", function(data) {
+      nameArray.push(data);
+      if (once) {
+        once = false;
+        myName=data.value.name;
+        playingGame(myName);
+        watchingGame(myName);
+        for (var u = 0; u < data.value.field.length; ++u) {
+        for (var y = 0; y < 8; ++y) {
+        for (var x = 0; x < 8; ++x) {
+          if (data.value.field[u][y][x] != -1) {
+            for (var v = 0; v < 8; ++v) {
+              if (v == data.value.field[u][y][x]) {
+                ctx[u].fillStyle = colorArray[myName % 12];
+              }
+            }
+            ctx[u].beginPath();
+            ctx[u].arc((x+1) * 79 - 36, (y+1) * 79 - 36,CELL_HALF_SIZE,0,Math.PI*2,true);
+            ctx[u].fill();
+          }
+        }
+        }
+        }
+      }
+    });
+
+
+    /////////////////////////////////
+    // 誰かがコマを置いた処理の受け取り //
+    /////////////////////////////////
+    socketio.on("put", function (data) {
+        for (var y = 0; y < 8; ++y) {
+        for (var x = 0; x < 8; ++x) {
+          if (data.value.field[y][x] != -1) {
+            console.log("field" + data.value.field[y][x]);
+            for (var v = 0; v < 8; ++v) {
+              if (v == data.value.field[y][x]) {
+                ctx[data.value.fieldNumber].fillStyle = colorArray[v ];
+              }
+            }
+            ctx[data.value.fieldNumber].beginPath();
+            ctx[data.value.fieldNumber].arc((x+1) * 79 - 36, (y+1) * 79 - 36,CELL_HALF_SIZE,0,Math.PI*2,true);
+            ctx[data.value.fieldNumber].fill();
+          }
+        }
+        }
+      if (data.value.fieldNumber == 1) {
+        if (startNewGameFlag) {
+          var msg0 = document.getElementById("msg0");
+          msg0.innerHTML = "順番をお待ち下さい。" + data.value.turn;
+          startNewGameMyTurnFlag = false;
+          turn = data.value.turn;
+        }
+                          console.log("turn:"+data.value.turn);
+                          console.log("Middleturn:"+startNewGameTurn);
+          turn = data.value.turn;
+
+        if (startNewGameFlag && data.value.turn == startNewGameTurn) {
+          var msg0 = document.getElementById("msg0");
+          msg0.innerHTML = "あなたの番です。";
+          startNewGameMyTurnFlag = true;
+        }
+      }
+    });
+
+
+    function playingGame(name) {
+      socketio.emit("playingGame", name);
+    }
+    function watchingGame(name) {
+      socketio.emit("watchingGame", name);
+    }
+
+
+
+    //////////////////
+    // コマを置く処理 //
+    //////////////////
+    document.onmousedown = function (e){
+	    if(!e) e = window.event;
+      console.log(turn);
+	    console.log(myName);
+
+      // if (!(startNewGameMyTurnFlag && e.clientX <= FIELD_SIZE && e.clientY <= FIELD_SIZE)) {
+      //   return;
+      // }
+      if (!( e.clientX <= FIELD_SIZE && e.clientY <= FIELD_SIZE)) {
+        return;
+      }
+
+      mouseX = e.clientX-14;
+      mouseY = e.clientY-14;
+
+      var x = 44+mouseX - mouseX % CELL_SIZE;
+      var y = 44+mouseY - mouseY % CELL_SIZE;
+    
+//      ++turn;
+      for (var v = 0; v < nameArray.length + 3; ++v) {
+        if (v == turn) {
+          ctx[fieldNumber].fillStyle = colorArray[myName % 12];
+        }
+      }
+      ctx[fieldNumber].beginPath();
+      ctx[fieldNumber].arc(x,y,CELL_HALF_SIZE,0,Math.PI*2,true);
+      ctx[fieldNumber].fill();
+    
+      var xx = Math.floor(x/CELL_SIZE);    
+      var yy = Math.floor(y/CELL_SIZE);    
+      var array = {
+          'x': xx,
+          'y': yy,
+          'turn': myName,//turn,
+          'myName': myName,
+          'fieldNumber': fieldNumber
+        };
+
+      socketio.emit("put",{value: array});
+
+    };
+
+
+    //////////////////
+    // オセロ盤を表示 //
+    //////////////////
+    window.onload = function() {
+      //描画コンテキストの取得
+      for (var v = 0; v < 1; ++v) {
+
+        var canvas = document.getElementById('gamefield' + v);
+        if (!canvas.getContext) {return;}
+
+        ctx.push(canvas.getContext('2d'));
+
+        ctx[v].fillStyle = 'rgb(00,128,00)';
+        ctx[v].fillRect(0,0,FIELD_SIZE,FIELD_SIZE);
+
+        //色を指定する
+        ctx[v].strokeStyle = 'rgb(00,00,00)';
+        ctx[v].lineWidth = 5;
+
+        for (var x = 0; x < 9; ++x) {
+          ctx[v].beginPath();
+          ctx[v].moveTo(4 + x * CELL_SIZE, 0);
+          ctx[v].lineTo(4 + x * CELL_SIZE, FIELD_SIZE);
+          ctx[v].closePath();
+          ctx[v].stroke();
+        }
+        for (var y = 0; y < 9; ++y) {
+          ctx[v].beginPath();
+          ctx[v].moveTo(0,          4 + y * CELL_SIZE);
+          ctx[v].lineTo(FIELD_SIZE, 4 + y * CELL_SIZE);
+          ctx[v].closePath();
+          ctx[v].stroke();
+        }
+      }
+    };
+  </script>
